@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+@theme{
+  --color-primary: #FF8500;
+  --color-primary-dull: #D28A35;
+  --color-secondary: #0F2A44;
+  --color-bg: #F5F7FA;
+  --color-text-primary: #1F2937;
+  --color-text-secondary: #6B7280;
+}
+
+* {
+  font-family: "Inter", sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
