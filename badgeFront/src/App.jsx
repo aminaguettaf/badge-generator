@@ -45,6 +45,7 @@ function App() {
         <Route path='/login' element={user ? <Navigate to="/" replace/> : <Login/>}/>
         <Route path='/' element={<ProtectedRoute> <Home/> </ProtectedRoute>}/>
       </Routes>
+      <Footer />
     </div>
   )
 }
