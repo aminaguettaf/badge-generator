@@ -1,49 +1,53 @@
-from django.shortcuts import render
-from rest_framework.permissions import IsAuthenticated
-from .pagination import StandardResultsSetPagination
+from django.utils import timezone
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from django.contrib.auth import authenticate, login, logout
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils.decorators import method_decorator
 
-class BaseViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
-    pagination_class = StandardResultsSetPagination
 
-    # Récuperer une liste
-    def list(self, request, *args, **kwargs):
-        queryset = self.filter_queryset(self.get_queryset())
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class GetCSRFToken(APIView):
+    def get(self, request):
+        return Response({'message': 'CSRF cookie set'})
 
-        all_flag = request.query_params.get('all')
-        if all_flag is not None and all_flag.lower() == 'true':
-            serializer = self.get_serializer(queryset, many=True)
-            return Response({'success': True, 'data': serializer.data, 'message': 'Données récupérées avec succès'})
+class LoginView(APIView):
+    def post(self, request):
+        data = request.data
+        username = data.get('username')
+        password = data.get('password')
 
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+        if not username or not password:
+            return Response({'error': 'Nom d\'utilisateur et mot de passe requis'}, status=status.HTTP_400_BAD_REQUEST)
 
-        serializer = self.get_serializer(queryset, many=True)
-        return Response({'success': True, 'data': serializer.data, 'message': 'Données récupérées avec succès'})
+        user = authenticate(request, username=username, password=password)
 
-    # Ajout d'un élément 
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
-        headers = self.get_success_headers(serializer.data)
-        return Response({'success': True, 'message': 'Ajout effectué avec succès', 'data': serializer.data}, status=status.HTTP_201_CREATED, headers=headers)
+        if user is not None:
+            login(request, user)
+            request.session['last_activity'] = timezone.now().timestamp()
+            request.session['login_time'] = timezone.now().timestamp()
+            return Response({'message': 'Connexion réussie', 'user': {'id': user.id, 'username': user.username, 'email': user.email, 'is_staff': user.is_staff}})
 
-    # Détail d'un élément
-    def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = self.get_serializer(instance)
-        return Response({'success': True, 'data': serializer.data})
+        else:
+            return Response({'error': 'Nom d\'utilisateur ou mot de passe incorrect'}, status=status.HTTP_401_UNAUTHORIZED)
 
-    # Modification 
-    def update(self, request, *args, **kwargs):
-        kwargs['partial'] = True
-        response = super().update(request, *args, **kwargs)
-        return Response({'success': True, 'message': 'Modification effectuée avec succès', 'data': response.data})
-    
-    # Suppression
-    def destroy(self, request, *args, **kwargs):
-        super().destroy(request, *args, **kwargs)
-        return Response({'success': True, 'message': 'Suppression effectuée avec succès'}, status=status.HTTP_200_OK)
+class UserView(APIView):
+    def get(self, request):
+        if request.user.is_authenticated:
+            last_activity = request.session.get('last_activity')
+            remaining_time = None
+            
+            if last_activity:
+                now = timezone.now().timestamp()
+                elapsed = now - last_activity
+                remaining_time = max(0, 1800 - elapsed)
+            
+            return Response({'user': {'id': request.user.id, 'username': request.user.username, 'email': request.user.email, 'is_staff': request.user.is_staff}, 'session_remaining': remaining_time})
+        else:
+            return Response({'error': 'Non authentifié'}, status=401)
+
+class LogoutView(APIView):
+    def post(self, request):
+        logout(request)
+        return Response({'message': 'Déconnexion réussie'})
